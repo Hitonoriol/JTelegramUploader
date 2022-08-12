@@ -1,0 +1,44 @@
+apply plugin: 'java'
+apply plugin: 'application'
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation 'org.apache.commons:commons-lang3:3.12.0'
+	implementation 'org.telegram:telegrambots:6.1.0'
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+
+version = '0.0.1'
+application {
+	mainClass = 'hitonoriol.jtelegramuploader.JTelegramUploader'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+task dist(type: Jar) {
+	archivesBaseName = 'JTelegramUploader'
+	archiveFileName = archivesBaseName + '.jar' 
+	manifest {
+		attributes 	'Main-Class': application.mainClass,
+					'Implementation-Title': archivesBaseName,
+					'Implementation-Version': version
+	}
+	
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+	from {
+		configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+	}
+
+	with jar
+}
