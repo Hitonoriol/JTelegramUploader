@@ -8,7 +8,8 @@ public class JTelegramUploader {
 			UPLOAD_DIR_OPT = "--dir",
 			BOT_TOKEN_OPT = "--bot-token",
 			IMG_COMPRESSION_OPT = "--compression-quality",
-			IMG_SCALE_OPT = "--scale-factor";
+			IMG_SCALE_OPT = "--scale-factor",
+			EXHAUSTIVE_FLAG = "-exhaustive";
 
 	public static void main(String[] argv) {
 		ArgParser args = new ArgParser(argv);
@@ -31,6 +32,9 @@ public class JTelegramUploader {
 
 		Uploader uploader = new Uploader(botToken, Long.parseLong(args.getOption(CHAT_ID_OPT)));
 		
+		if (args.flagExists(EXHAUSTIVE_FLAG))
+			uploader.setExhaustiveMessageGeneration(true);
+		
 		if (args.optionExists(IMG_COMPRESSION_OPT))
 			uploader.getImageCompressor().setCompressionQuality(args.getFloatOption(IMG_COMPRESSION_OPT));
 		
@@ -47,8 +51,9 @@ public class JTelegramUploader {
 				+ "  --send-to <telegram chat_id>  :  Telegram chat_id to send files to\n"
 				+ "Optional args:\n"
 				+ "  -compressed  :  Send images as photos\n"
-				+ "  --compression-quality  :  Set compression quality for large photos [0.0 - 1.0]\n"
-				+ "  --scale-factor  :  Set scale factor for large photos (any positive floating point number)"
+				+ "  --compression-quality <value>  :  Set compression quality for large photos [0.0 - 1.0]\n"
+				+ "  --scale-factor <value>  :  Set scale factor for large photos (any positive floating point number)\n"
+				+ "  -exhaustive  :  Form messages exhaustively (try to add maximum files (10) to every message, neglecting their sorting order)"
 		);
 		printBotTokenHelp();
 	}

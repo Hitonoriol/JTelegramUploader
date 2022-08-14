@@ -26,12 +26,14 @@ import org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto;
 public class Uploader {
 	private Sender bot;
 	private long chatId;
+	private boolean exhaustiveGroups = false;
 	private ImageCompressor imageCompressor = new ImageCompressor();
 
 	private static final int MAX_FILESIZE = 0x3200000, MAX_PHOTO_SIZE = 0xA00000;
 	private static final double MB = 1048576.0;
 	private static final long INTERVAL = 61000;
 	private static final int FILES_PER_MSG = 10, MSG_LIMIT = 20;
+	private static final int MAX_RETRIES = 3;
 
 	public Uploader(String botToken, long chatId) {
 		bot = new Sender(botToken);
@@ -64,7 +66,11 @@ public class Uploader {
 	public ImageCompressor getImageCompressor() {
 		return imageCompressor;
 	}
-	
+
+	public void setExhaustiveMessageGeneration(boolean value) {
+		exhaustiveGroups = value;
+	}
+
 	private static long getFilesize(Path path) {
 		try {
 			return Files.size(path);
@@ -125,6 +131,7 @@ public class Uploader {
 					&& getFilesize(file.toPath()) > MAX_PHOTO_SIZE) {
 				printf("Compressing `%s` (too large for a photo)...\n",
 						file.getName());
+				File original = file;
 				file = imageCompressor.compressImageFile(file);
 
 				/* If compression failed, `file` doesn't exist */
@@ -132,7 +139,8 @@ public class Uploader {
 					printf("Oops, compression failed\n");
 					skipMedia.accept(file);
 					continue;
-				}
+				} else if (exhaustiveGroups)
+					files.set(files.indexOf(original), file);
 
 				/* If photo is still too large, skip it */
 				if (getFilesize(file.toPath()) > MAX_PHOTO_SIZE) {
@@ -147,7 +155,10 @@ public class Uploader {
 			if (totalSize + fileSize >= MAX_FILESIZE) {
 				printf("No space left for `%s` in current group, leaving it for the next one\n",
 						file.getName());
-				break;
+				if (exhaustiveGroups)
+					continue;
+				else
+					break;
 			}
 
 			input.setMedia(file, file.getName());
@@ -198,8 +209,9 @@ public class Uploader {
 
 	private void uploadFiles(List<File> filesToUpload, Supplier<InputMedia> mediaFactory) {
 		printf("Starting the upload of %d files\n", filesToUpload.size());
+		printf("Files will be sent in %ssequential order\n", exhaustiveGroups ? "non-" : "");
 
-		int filesSent = 0;
+		int filesSent = 0, retries = 0;
 		long firstFileTime = System.currentTimeMillis();
 		boolean groupSent = true;
 		List<InputMedia> media = null;
@@ -209,7 +221,7 @@ public class Uploader {
 			if (groupSent)
 				media = nextMediaGroup(filesToUpload, mediaFactory);
 			else
-				printf("Retrying...\n");
+				printf("Retrying (%d/%d)...\n", retries, MAX_RETRIES);
 
 			if (filesSent + media.size() > MSG_LIMIT) {
 				if (timePassed < INTERVAL)
@@ -223,6 +235,16 @@ public class Uploader {
 
 			String response = media.size() > 1 ? sendMediaGroup(media) : sendMedia(media.get(0));
 			groupSent = response.equals(OK_RESPONSE);
+			
+			if (!groupSent)
+				++retries;
+			else if (retries > 0)
+				retries = 0;
+			
+			if (retries > MAX_RETRIES) {
+				printf("Gave up retrying :c\n");
+				groupSent = true;
+			}
 
 			printf("    %s\n\n", response);
 		}
